@@ -24,7 +24,7 @@ See [LICENSE](LICENSE) file for complete terms and conditions.
 > [!CAUTION]
 > **LICENSE TRANSITION PLANNED** — This project is currently proprietary. The license will change to open source once the project has reached a suitable state to allow for it.
 
-[Project Structure](#project-structure) · [Getting Started](#getting-started) · [Tech Stack](#tech-stack) · [API Reference](#api-reference) · [Architecture](#architecture) · [Contributing](#contributing) · [Portfolio Services](#portfolio-services) · [Portfolio Games](#portfolio-games)
+[Project Structure](#project-structure) · [Getting Started](#getting-started) · [Tech Stack](#tech-stack) · [API Reference](#api-reference) · [Architecture](#architecture) · [Environment Variables](#environment-variables) · [Authentication](#authentication) · [Error Handling](#error-handling) · [Rate Limiting](#rate-limiting) · [Data Models](#data-models) · [Deployment](#deployment) · [Supported Clients](#supported-clients) · [Versioning](#versioning) · [Remaining Work](#remaining-work) · [Future Improvements](#future-improvements) · [Contributing](#contributing) · [Portfolio Services](#portfolio-services) · [Portfolio Games](#portfolio-games)
 
 ## Project Structure
 
@@ -378,6 +378,332 @@ This project enforces seven complementary design principles:
    - All inputs validated with Zod schemas in the domain layer
    - Fastify route schemas auto-generate OpenAPI docs via `@fastify/swagger`
    - **Benefit**: Single source of truth for validation, serialization, and documentation
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable | Description | Type | Default | Required |
+| -------- | ----------- | ---- | ------- | -------- |
+| `PORT` | HTTP server port | `number` | `3000` | No |
+| `HOST` | Bind address | `string` | `0.0.0.0` | No |
+| `NODE_ENV` | Runtime environment (`development`, `staging`, `production`) | `string` | `development` | No |
+| `LOG_LEVEL` | Pino log level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) | `string` | `info` | No |
+| `DATABASE_URL` | PostgreSQL connection string | `string` | — | **Yes** (production) |
+| `API_KEY` | Service-to-service API key for internal callers | `string` | — | **Yes** (production) |
+| `JWT_SECRET` | Secret used to sign and verify JWT access tokens | `string` | — | **Yes** (production) |
+| `BILLING_API_URL` | Internal Billing API base URL for subscription-tier lookups | `string` | `http://localhost:3001` | No |
+| `BILLING_API_KEY` | API key for authenticating with the Billing API | `string` | — | **Yes** (production) |
+| `ADMOB_APP_ID` | AdMob application ID for mediation | `string` | — | No |
+| `UNITY_ADS_GAME_ID` | Unity Ads game ID for mediation | `string` | — | No |
+| `CDN_BASE_URL` | Base URL for creative asset CDN | `string` | — | No |
+| `STORAGE_BUCKET` | S3-compatible bucket for creative uploads | `string` | — | **Yes** (production) |
+| `STORAGE_REGION` | Cloud storage region | `string` | `us-east-1` | No |
+| `STORAGE_ACCESS_KEY` | Cloud storage access key ID | `string` | — | **Yes** (production) |
+| `STORAGE_SECRET_KEY` | Cloud storage secret access key | `string` | — | **Yes** (production) |
+| `CORS_ORIGIN` | Allowed CORS origin(s), comma-separated | `string` | `*` | No |
+| `RATE_LIMIT_MAX` | Max requests per rate-limit window | `number` | `100` | No |
+| `RATE_LIMIT_WINDOW_MS` | Rate-limit window duration in milliseconds | `number` | `60000` | No |
+
+## Authentication
+
+All non-public endpoints require authentication. The API supports two authentication methods:
+
+### JWT Bearer Tokens (Game Clients & Admin Apps)
+
+Game clients and admin apps authenticate by sending a JWT in the `Authorization` header:
+
+```
+Authorization: Bearer <token>
+```
+
+- Tokens are issued by the auth service upon successful login
+- Tokens contain the user's `sub` (user ID) and `roles` array
+- Tokens expire after a configurable TTL (default: 1 hour)
+- Refresh tokens are used to obtain new access tokens without re-authentication
+
+### API Keys (Service-to-Service)
+
+Internal services authenticate with a static API key in the `X-API-Key` header:
+
+```
+X-API-Key: <key>
+```
+
+- Used by admin apps and other portfolio APIs for server-to-server calls
+- Keys are configured via the `API_KEY` environment variable
+- API key requests bypass user-scoped authorization checks
+
+### Public Endpoints
+
+The following endpoints do not require authentication:
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `GET /health` | Health check |
+| `GET /ready` | Readiness probe |
+| `GET /docs` | Swagger UI |
+| `GET /docs/json` | OpenAPI spec |
+
+## Error Handling
+
+All error responses follow a consistent JSON structure:
+
+```json
+{
+  "statusCode": 422,
+  "error": "Unprocessable Entity",
+  "message": "Campaign 'summer-promo' has exceeded its daily budget",
+  "code": "BUDGET_EXCEEDED"
+}
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | `number` | HTTP status code |
+| `error` | `string` | HTTP status text |
+| `message` | `string` | Human-readable error description |
+| `code` | `string?` | Machine-readable domain error code (optional) |
+
+### HTTP Status Codes
+
+| Status | Meaning | Example |
+| ------ | ------- | ------- |
+| `400` | Bad Request | Malformed JSON body or invalid creative dimensions |
+| `401` | Unauthorized | Missing or expired JWT / invalid API key |
+| `403` | Forbidden | Valid auth but insufficient role for campaign management |
+| `404` | Not Found | Campaign, creative, or placement not found |
+| `409` | Conflict | Duplicate placement slug or campaign name |
+| `413` | Payload Too Large | Creative asset upload exceeds size limit |
+| `422` | Unprocessable Entity | Business rule violation (e.g., budget exceeded, schedule conflict) |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Internal Server Error | Unexpected failure |
+
+### Domain Error Codes
+
+| Code | Description |
+| ---- | ----------- |
+| `CAMPAIGN_NOT_FOUND` | No campaign exists with the given ID |
+| `CAMPAIGN_INACTIVE` | Campaign is paused or ended; cannot serve ads |
+| `CAMPAIGN_BUDGET_EXCEEDED` | Campaign has spent its daily or total budget |
+| `CREATIVE_NOT_FOUND` | No creative exists with the given ID |
+| `CREATIVE_NOT_APPROVED` | Creative is pending review and cannot be served |
+| `CREATIVE_FORMAT_INVALID` | Creative dimensions or format do not match the target placement |
+| `PLACEMENT_NOT_FOUND` | No ad placement exists with the given ID |
+| `PLACEMENT_BLOCKLISTED` | Placement is on the advertiser's or publisher's blocklist |
+| `IMPRESSION_DUPLICATE` | This impression has already been recorded (idempotency check) |
+| `REWARD_ALREADY_CLAIMED` | Rewarded ad reward has already been granted |
+| `REWARD_NOT_EARNED` | User has not completed the required ad view for the reward |
+| `AUDIENCE_NOT_FOUND` | Target audience segment does not exist |
+| `SCHEDULE_CONFLICT` | Campaign schedule overlaps with an exclusive placement reservation |
+| `CONSENT_REQUIRED` | User has not provided GDPR/CCPA ad-tracking consent |
+| `CONSENT_WITHDRAWN` | User has withdrawn ad-tracking consent |
+| `FRAUD_DETECTED` | Click or impression flagged as fraudulent |
+
+## Rate Limiting
+
+Rate limiting is enforced via `@fastify/rate-limit` to protect against abuse:
+
+| Scope | Limit | Window | Notes |
+| ----- | ----- | ------ | ----- |
+| **Global default** | 100 requests | 60 seconds | Per IP address |
+| **Ad serving** | 300 requests | 60 seconds | High-frequency ad requests from game clients |
+| **Impression tracking** | 500 requests | 60 seconds | Fire-and-forget pixel/beacon calls |
+| **Creative uploads** | 10 requests | 60 seconds | Admin-only |
+| **Campaign management** | 60 requests | 60 seconds | CRUD operations |
+| **Reporting endpoints** | 30 requests | 60 seconds | Heavy queries |
+| **Health / readiness** | Unlimited | — | Excluded from rate limiting |
+
+Rate-limited responses include standard headers:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 47
+X-RateLimit-Reset: 1719000060
+Retry-After: 12
+```
+
+When the limit is exceeded, the API returns `429 Too Many Requests` with the error body above.
+
+## Data Models
+
+Planned domain entities for the ad system. These will be implemented as Zod schemas in `src/domain/types.ts`:
+
+### Campaign
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique campaign identifier |
+| `advertiserId` | `string (uuid)` | Advertiser's user ID |
+| `name` | `string` | Campaign name |
+| `status` | `'draft' \| 'active' \| 'paused' \| 'ended' \| 'archived'` | Campaign state |
+| `startDate` | `string (ISO 8601)` | Campaign start date |
+| `endDate` | `string (ISO 8601)?` | Campaign end date (`null` = ongoing) |
+| `dailyBudget` | `number` | Daily spend limit in cents |
+| `totalBudget` | `number` | Lifetime spend limit in cents |
+| `spentToday` | `number` | Amount spent today in cents |
+| `spentTotal` | `number` | Lifetime spend in cents |
+| `targetAudienceIds` | `string[]` | Audience segments to target |
+| `createdAt` | `string (ISO 8601)` | Creation timestamp |
+| `updatedAt` | `string (ISO 8601)` | Last update timestamp |
+
+### Creative
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique creative identifier |
+| `campaignId` | `string (uuid)` | Parent campaign |
+| `format` | `'banner' \| 'interstitial' \| 'native' \| 'rewarded_video'` | Ad format |
+| `name` | `string` | Creative name |
+| `assetUrl` | `string` | URL to the creative asset |
+| `clickThroughUrl` | `string` | Destination URL on click |
+| `width` | `number` | Width in pixels |
+| `height` | `number` | Height in pixels |
+| `status` | `'pending' \| 'approved' \| 'rejected'` | Review status |
+| `rejectionReason` | `string?` | Reason for rejection |
+| `createdAt` | `string (ISO 8601)` | Creation timestamp |
+
+### Placement
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique placement identifier |
+| `slug` | `string` | URL-friendly placement name (e.g., `game-over-interstitial`) |
+| `gameId` | `string` | Which game this placement belongs to |
+| `format` | `'banner' \| 'interstitial' \| 'native' \| 'rewarded_video'` | Accepted ad format |
+| `position` | `string` | Screen position (e.g., `bottom`, `fullscreen`, `in-feed`) |
+| `active` | `boolean` | Whether the placement is live |
+
+### Impression
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique impression identifier |
+| `campaignId` | `string (uuid)` | Campaign that was served |
+| `creativeId` | `string (uuid)` | Creative that was displayed |
+| `placementId` | `string (uuid)` | Where the ad was shown |
+| `userId` | `string (uuid)?` | Viewer's user ID (if authenticated) |
+| `deviceId` | `string?` | Anonymous device fingerprint |
+| `timestamp` | `string (ISO 8601)` | When the impression occurred |
+| `viewDurationMs` | `number?` | How long the ad was visible |
+| `revenue` | `number` | Revenue earned in cents |
+
+### ClickEvent
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique click identifier |
+| `impressionId` | `string (uuid)` | Associated impression |
+| `timestamp` | `string (ISO 8601)` | When the click occurred |
+| `clickThroughUrl` | `string` | Destination URL |
+| `fraudScore` | `number` | Fraud risk score (0.0–1.0) |
+| `flagged` | `boolean` | Whether the click is flagged as suspicious |
+
+### FrequencyCap
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `campaignId` | `string (uuid)` | Campaign this cap applies to |
+| `maxImpressions` | `number` | Maximum impressions per user |
+| `windowHours` | `number` | Time window in hours |
+| `scope` | `'user' \| 'device' \| 'session'` | Scope of the cap |
+
+### ConsentRecord
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `userId` | `string (uuid)` | User's ID |
+| `consentGiven` | `boolean` | Whether consent was granted |
+| `consentType` | `'gdpr' \| 'ccpa' \| 'coppa'` | Regulation type |
+| `grantedAt` | `string (ISO 8601)` | When consent was given |
+| `withdrawnAt` | `string (ISO 8601)?` | When consent was withdrawn |
+| `ipAddress` | `string` | IP at time of consent action |
+
+### RewardedAdSession
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Session identifier |
+| `userId` | `string (uuid)` | User who watched the ad |
+| `creativeId` | `string (uuid)` | Rewarded creative shown |
+| `status` | `'started' \| 'completed' \| 'claimed' \| 'expired'` | Session state |
+| `rewardType` | `string` | Type of reward (e.g., `coins`, `hints`, `extra_life`) |
+| `rewardAmount` | `number` | Amount of the reward |
+| `startedAt` | `string (ISO 8601)` | When the ad started playing |
+| `completedAt` | `string (ISO 8601)?` | When the ad finished playing |
+| `claimedAt` | `string (ISO 8601)?` | When the reward was claimed |
+
+## Deployment
+
+### Docker (Recommended)
+
+```bash
+# Build the production image
+docker build -t ads-api .
+
+# Run with environment variables
+docker run -d \
+  --name ads-api \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e DATABASE_URL=postgresql://user:pass@db:5432/ads \
+  -e JWT_SECRET=your-jwt-secret \
+  -e BILLING_API_URL=http://billing-api:3000 \
+  -e BILLING_API_KEY=internal-key \
+  -e STORAGE_BUCKET=ad-creatives \
+  -e STORAGE_ACCESS_KEY=AKIA... \
+  -e STORAGE_SECRET_KEY=... \
+  ads-api
+```
+
+### Health Checks
+
+Configure your orchestrator (Docker Compose, Kubernetes, ECS) to use the built-in probes:
+
+| Probe | Endpoint | Interval | Timeout | Failure Threshold |
+| ----- | -------- | -------- | ------- | ----------------- |
+| Liveness | `GET /health` | 30s | 5s | 3 |
+| Readiness | `GET /ready` | 10s | 5s | 3 |
+
+### Production Checklist
+
+- [ ] Set `NODE_ENV=production`
+- [ ] Provide all **required** environment variables (see [Environment Variables](#environment-variables))
+- [ ] Configure database connection pooling (recommended: 10–20 connections)
+- [ ] Enable TLS termination at the load balancer / reverse proxy
+- [ ] Set up database migrations before first deploy
+- [ ] Configure cloud storage for creative assets
+- [ ] Configure CDN for serving creative assets with low latency
+- [ ] Configure log aggregation (Pino outputs structured JSON)
+- [ ] Set up monitoring alerts on `/health` and `/ready`
+- [ ] Enable CORS for specific origins (do not use `*` in production)
+- [ ] Set up fraud-detection alerting thresholds
+- [ ] Configure GDPR/CCPA consent flow before serving personalized ads
+
+## Supported Clients
+
+This API is consumed by the following applications:
+
+| Client | Type | Description |
+| ------ | ---- | ----------- |
+| **[📺 Ad Network](https://github.com/scottdreinhart/ad-network)** | Admin App | Campaign management, creative approval, revenue reports |
+| **All portfolio games** | Game Clients | Ad requests, impression tracking, rewarded ad flows |
+| **[💳 Billing API](https://github.com/scottdreinhart/billing-api)** | API (internal) | Subscription-tier checks to determine ad-free eligibility |
+
+## Versioning
+
+The API uses **URL-prefix versioning**:
+
+```
+https://api.example.com/v1/campaigns
+https://api.example.com/v1/placements
+```
+
+- All current endpoints are under `/v1/`
+- Breaking changes will be introduced under `/v2/` with a deprecation notice on `/v1/`
+- Non-breaking additions (new fields, new endpoints) are added to the current version
+- Deprecated versions will be supported for a minimum of **6 months** after the successor is released
+- The OpenAPI spec at `/docs/json` includes the version in its `info.version` field
 
 ## Remaining Work
 
