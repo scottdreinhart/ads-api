@@ -303,6 +303,41 @@ http://localhost:3000/docs
 | `PATCH` | `/schedules/:campaignId` | Update schedule windows |
 | `DELETE` | `/schedules/:campaignId` | Remove schedule (campaign runs continuously) |
 
+### Client UI Pairings
+
+Endpoints that pair directly with a visible UI element in game clients or the Ad Network admin app:
+
+| UI Element | Icon / Control | Endpoint | Surface |
+|---|---|---|---|
+| Banner ad component | Rectangular ad slot rendered in game UI | `GET /serve` | Game client — bottom/top banner area |
+| Interstitial overlay | Full-screen ad overlay between game rounds | `GET /serve` | Game client — between-game transition |
+| Native ad card | Styled ad card blending with game content | `GET /serve` | Game client — menu/feed |
+| Ad click-through | The ad creative itself (tappable/clickable) | `POST /clicks` | Game client — any ad surface |
+| "Watch Ad for Reward" button | ▶ play icon + gift/coin icon | `POST /rewarded/start` | Game client — hint, extra life, or currency prompt |
+| Reward claim animation | 🎁 gift box opening animation + "Claim" button | `POST /rewarded/complete` | Game client — post-ad reward overlay |
+| Reward available indicator | 🎁 gift icon badge (pulsing when available) | `GET /rewarded/availability` | Game client — reward button visibility |
+| "Close Ad" button | ✕ close icon (top-right corner, after timer) | Fires `POST /impressions` on close | Game client — interstitial/rewarded ad overlay |
+| Ad-free badge | 🚫 "No Ads" badge for premium subscribers | `GET /entitlements/check` (via Billing API) | Game client — premium user indicator |
+| Privacy consent toggle | 🔒 toggle switch ("Allow personalized ads") | `POST /consent` | Game client — settings / privacy screen |
+| Consent status indicator | 🟢 / 🔴 dot next to privacy setting | `GET /consent/:userId` | Game client — settings screen |
+| "Withdraw Consent" button | 🗑 trash icon + confirmation | `DELETE /consent/:userId` | Game client — privacy settings |
+| Campaign pause button | ⏸ pause icon | `POST /campaigns/:id/pause` | Admin app — campaign list row |
+| Campaign resume button | ▶ play icon | `POST /campaigns/:id/resume` | Admin app — campaign list row |
+| Campaign status badge | 🟢 Active / 🟡 Paused / 🔴 Ended pill | `GET /campaigns/:id` | Admin app — campaign card |
+| Creative approve button | ✅ green checkmark | `POST /creatives/:id/approve` | Admin app — creative review queue |
+| Creative reject button | ❌ red X | `POST /creatives/:id/reject` | Admin app — creative review queue |
+| Creative preview | Image/video preview in review panel | `GET /creatives/:id` | Admin app — creative detail |
+| Budget progress bar | Progress bar (spent / total) | `GET /budgets/:campaignId` | Admin app — campaign detail |
+| Budget forecast indicator | 📅 calendar icon with projected end date | `GET /budgets/:campaignId/forecast` | Admin app — campaign detail |
+| Blocklist add button | 🚫 block icon + input field | `POST /blocklists` | Admin app — blocklist management |
+| Blocklist remove button | ✕ remove icon on blocklist row | `DELETE /blocklists/:id` | Admin app — blocklist row |
+| Revenue summary card | 💰 metric card with trend arrow | `GET /analytics/revenue` | Admin app — dashboard |
+| Impressions chart | 📊 bar chart with fill rate overlay | `GET /analytics/impressions` | Admin app — analytics |
+| CTR chart | 📈 line chart showing click-through rate | `GET /analytics/clicks` | Admin app — analytics |
+| Dashboard summary | Multi-metric card grid (revenue, impressions, CTR) | `GET /analytics/summary` | Admin app — dashboard home |
+| Audience reach estimator | 👥 user count with slider inputs | `POST /audiences/:id/estimate` | Admin app — audience builder |
+| Schedule calendar | 📅 weekly calendar grid with active-hour highlighting | `GET /schedules/:campaignId` | Admin app — campaign scheduling |
+
 ## Architecture
 
 This project enforces seven complementary design principles:
