@@ -241,6 +241,68 @@ http://localhost:3000/docs
 | `GET` | `/analytics/clicks` | Click-through rate report by campaign/placement |
 | `GET` | `/analytics/summary` | Dashboard summary — total revenue, impressions, CTR, top campaigns |
 
+#### Audiences & Targeting
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/audiences` | Create an audience segment (age range, geo, device, interests, game history) |
+| `GET` | `/audiences` | List audience segments |
+| `GET` | `/audiences/:id` | Get audience details and estimated reach |
+| `PATCH` | `/audiences/:id` | Update audience targeting criteria |
+| `DELETE` | `/audiences/:id` | Archive an audience segment |
+| `POST` | `/audiences/:id/estimate` | Estimate daily impressions for an audience segment |
+
+#### Ad Formats
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/formats` | Register a supported ad format (banner, interstitial, rewarded video, native) |
+| `GET` | `/formats` | List all supported ad formats with spec requirements |
+| `GET` | `/formats/:id` | Get format details (dimensions, file types, max size, duration) |
+| `PATCH` | `/formats/:id` | Update format specifications (admin) |
+
+#### Rewarded Ads
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/rewarded/start` | Signal that a user started watching a rewarded ad |
+| `POST` | `/rewarded/complete` | Confirm rewarded ad completion and trigger reward callback |
+| `GET` | `/rewarded/availability` | Check if a rewarded ad is available for a user + placement |
+| `GET` | `/rewarded/history` | List reward grants for a user (paginated) |
+
+#### Budgets & Pacing
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/budgets/:campaignId` | Get budget status (spent, remaining, daily cap, pacing) |
+| `PATCH` | `/budgets/:campaignId` | Update budget or daily spending cap |
+| `GET` | `/budgets/:campaignId/forecast` | Forecast budget exhaustion date at current spend rate |
+
+#### Blocklists
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/blocklists` | Add an advertiser, category, or domain to the blocklist |
+| `GET` | `/blocklists` | List all blocklist entries |
+| `DELETE` | `/blocklists/:id` | Remove a blocklist entry |
+
+#### Consent (GDPR / CCPA)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/consent/:userId` | Get user's current ad-tracking consent status |
+| `POST` | `/consent` | Record or update user consent (opt-in/opt-out, consent string) |
+| `DELETE` | `/consent/:userId` | Withdraw consent and purge tracking data for a user |
+
+#### Scheduling
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/schedules` | Create an ad schedule (dayparting — specify hours/days a campaign runs) |
+| `GET` | `/schedules/:campaignId` | Get schedule for a campaign |
+| `PATCH` | `/schedules/:campaignId` | Update schedule windows |
+| `DELETE` | `/schedules/:campaignId` | Remove schedule (campaign runs continuously) |
+
 ## Architecture
 
 This project enforces seven complementary design principles:
