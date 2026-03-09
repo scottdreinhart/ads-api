@@ -172,6 +172,75 @@ http://localhost:3000/docs
 | `GET` | `/ready` | Readiness check — returns `{ ready: true }` when all dependencies are available |
 | `GET` | `/docs` | Swagger UI — interactive API documentation |
 
+### Proposed Endpoints
+
+#### Campaigns
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/campaigns` | Create an ad campaign (name, budget, date range, targeting rules) |
+| `GET` | `/campaigns` | List campaigns (paginated, filterable by status/date) |
+| `GET` | `/campaigns/:id` | Get campaign details and performance summary |
+| `PATCH` | `/campaigns/:id` | Update campaign settings (budget, targeting, schedule) |
+| `POST` | `/campaigns/:id/pause` | Pause a running campaign |
+| `POST` | `/campaigns/:id/resume` | Resume a paused campaign |
+| `DELETE` | `/campaigns/:id` | Archive a campaign |
+
+#### Creatives
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/creatives` | Upload an ad creative (image, text, CTA, destination URL) |
+| `GET` | `/creatives` | List creatives (paginated, filterable by format/campaign) |
+| `GET` | `/creatives/:id` | Get creative details and asset URLs |
+| `PATCH` | `/creatives/:id` | Update creative metadata or replace assets |
+| `DELETE` | `/creatives/:id` | Archive a creative |
+| `POST` | `/creatives/:id/approve` | Approve a creative for serving (admin) |
+| `POST` | `/creatives/:id/reject` | Reject a creative with reason (admin) |
+
+#### Ad Placements
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/placements` | Register an ad slot in a game (position, size, format, game ID) |
+| `GET` | `/placements` | List all registered ad placements across games |
+| `GET` | `/placements/:id` | Get placement configuration details |
+| `PATCH` | `/placements/:id` | Update placement settings (size, position, refresh interval) |
+| `DELETE` | `/placements/:id` | Deactivate a placement |
+
+#### Ad Serving (Decision)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/serve` | Request an ad to display (`?placementId=&userId=&gameId=`) — returns the winning creative |
+| `POST` | `/serve/batch` | Request multiple ads in a single call (for pre-caching) |
+
+#### Tracking
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/impressions` | Record an ad impression (placement, creative, user, timestamp) |
+| `POST` | `/clicks` | Record an ad click event (placement, creative, user, timestamp) |
+| `POST` | `/conversions` | Record a conversion event (purchase/signup triggered by an ad) |
+
+#### Frequency Caps
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/frequency-caps` | Create a frequency cap rule (max impressions per user/time window) |
+| `GET` | `/frequency-caps` | List frequency cap rules (filterable by campaign/placement) |
+| `PATCH` | `/frequency-caps/:id` | Update a frequency cap rule |
+| `DELETE` | `/frequency-caps/:id` | Remove a frequency cap rule |
+
+#### Revenue & Analytics
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/analytics/revenue` | Revenue report (filterable by campaign/game/date range) |
+| `GET` | `/analytics/impressions` | Impression report with fill rate and eCPM metrics |
+| `GET` | `/analytics/clicks` | Click-through rate report by campaign/placement |
+| `GET` | `/analytics/summary` | Dashboard summary — total revenue, impressions, CTR, top campaigns |
+
 ## Architecture
 
 This project enforces seven complementary design principles:
@@ -238,10 +307,16 @@ This project enforces seven complementary design principles:
 
 ## Future Improvements
 
-- [ ] **WebSocket support** — real-time event streaming for live updates
-- [ ] **Message queue integration** — async job processing with BullMQ or similar
-- [ ] **Caching layer** — Redis-backed response caching for high-traffic endpoints
-- [ ] **Multi-tenant support** — serve all portfolio games from a single API instance
+- [ ] **Real-time bidding (RTB)** — integrate with ad exchanges for programmatic demand alongside direct-sold campaigns
+- [ ] **A/B creative testing** — automatically split traffic between creative variants and report performance differences
+- [ ] **Smart frequency capping** — ML-based optimal frequency detection instead of static per-user limits
+- [ ] **Rewarded ad support** — serve reward-gated video/interstitial ads that grant in-game currency or hints on completion
+- [ ] **Ad mediation layer** — waterfall/hybrid mediation across AdMob, Unity Ads, and direct campaigns to maximize fill rate
+- [ ] **Geo-targeting & device targeting** — serve different creatives based on user location, device type, or OS
+- [ ] **Fraud detection** — flag suspicious click patterns (rapid-fire, bot signatures) and exclude them from billing
+- [ ] **Advertiser self-serve portal** — API endpoints supporting a self-service campaign builder for third-party advertisers
+- [ ] **Real-time analytics WebSocket** — stream live impression/click/revenue events to the Ad Network admin dashboard
+- [ ] **GDPR/CCPA consent endpoints** — manage user ad-tracking consent status and serve consent-appropriate creatives
 
 ## Portfolio Services
 
